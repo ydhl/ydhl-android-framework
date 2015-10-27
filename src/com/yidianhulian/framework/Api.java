@@ -5,8 +5,10 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.UnsupportedEncodingException;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
@@ -34,9 +36,29 @@ import org.json.JSONObject;
 import android.util.Log;
 
 public class Api {
+    /**
+     * Post数据格式
+     * @author leeboo
+     *
+     */
+    public enum PostDataType {
+        /**
+         * 普通表单，key=value的形式
+         */
+        FORM,
+        /**
+         * JSON结构体，参数作为一个json数据包发送
+         */
+        JSON,
+        /**
+         * XML结构体，参数作为一个xml数据包发送
+         */
+        XML
+    }
 	public static final String BOUNDARY = "-----------AndroidFormBoundar7d4a6d158c9";
 	private String mApi;
 	private Map<String, String> mQueryStr;
+	private PostDataType mPostDataType = PostDataType.FORM;
 	private List<String> mFiles;
 	private String mMethod;
 	private ApiCallback mCallback;
@@ -69,6 +91,10 @@ public class Api {
 	public Api(String method, String api, Map<String, String> queryStr){
         this(method, api, queryStr, null);
     }
+	
+	public void setPostDataType(PostDataType type){
+	    mPostDataType = type;
+	}
 	
 	public void addHeader(String header, String value){
 	    mHeaders.put(header, value);
@@ -136,94 +162,13 @@ public class Api {
             
             connection.connect();
             
-            
-            
-            DataOutputStream out = new DataOutputStream(connection.getOutputStream());
-
-            StringBuffer buffer = new StringBuffer();
-            Iterator<Entry<String, String>> iterator = mQueryStr.entrySet().iterator();
-            while (iterator.hasNext()) {
-                Entry<String, String> entry = iterator.next();
-                if (hasFile && mFiles.contains(entry.getKey())) {
-                    continue;
-                }
-                String value = entry.getValue();
-                
-
-                if (hasFile) {
-                    buffer.append("--");
-                    buffer.append(BOUNDARY);
-                    buffer.append("\r\n");
-                    buffer.append("Content-Disposition: form-data; name=\"");
-                    buffer.append(entry.getKey());
-
-                    buffer.append("\"\r\n\r\n");
-                    buffer.append(URLEncoder.encode(value, "utf-8"));
-                    buffer.append("\r\n");
-                } else {
-                    value = value != null ? URLEncoder.encode(value, "utf-8") : "";
-                    buffer.append(entry.getKey()).append("=").append(value).append("&");
-                }
-            }
-            System.out.println(mApi);
-            System.out.println(buffer);
-            if(hasFile){
-                out.writeBytes(buffer.toString());
+            if(mPostDataType==PostDataType.JSON){
+                sendJsonPostData(end_data, connection);
+            }else if(mPostDataType==PostDataType.XML){
+                //TODO
             }else{
-                if(buffer.length()>0){//remove end &
-                    out.writeBytes(buffer.substring(0, buffer.length()-1));
-                }else{
-                    out.writeBytes(buffer.toString());
-                }
+                sendPostData(hasFile, end_data, connection);
             }
-
-
-            if (hasFile) {
-                long totalSize = 0l;
-                for (int i = 0; i < mFiles.size(); i++) {
-                    String fname = mQueryStr.get(mFiles.get(i));
-                    File file = new File(fname);
-                    if (file.exists()) {
-                        FileInputStream fis = new FileInputStream(file);
-                        totalSize += fis.available();
-                        fis.close();
-                    }
-                }
-                
-                for (int i = 0; i < mFiles.size(); i++) {
-                    String fname = mQueryStr.get(mFiles.get(i));
-                    File file = new File(fname);
-                    StringBuilder sb = new StringBuilder();
-                    sb.append("--");
-                    sb.append(BOUNDARY);
-                    sb.append("\r\n");
-                    sb.append("Content-Disposition: form-data; name=\"");
-                    sb.append(mFiles.get(i));
-                    sb.append("\"; filename=\"");
-                    sb.append(file.getName());
-                    sb.append("\"\r\n");
-                    sb.append("Content-Type: application/octet-stream\r\n\r\n");
-
-                    out.writeBytes(sb.toString());
-                    DataInputStream in = new DataInputStream(new FileInputStream(file));
-                    int bytes = 0;
-                    long sendedSize = 0;
-                    byte[] bufferOut = new byte[1024];
-                    while ((bytes = in.read(bufferOut)) != -1) {
-                        out.write(bufferOut, 0, bytes);
-                        out.flush();
-                        sendedSize += bytes;
-                        if(mCallback!=null)mCallback.updateApiProgress((float)sendedSize / (float)totalSize);
-                    }
-                    out.writeBytes("\r\n");
-                    
-                    in.close();
-                }
-                out.writeBytes(end_data);
-            }
-
-            out.flush();
-            out.close(); // flush and close
 
             mHttpCode = connection.getResponseCode();
             try{
@@ -257,6 +202,113 @@ public class Api {
         
         return json;
 	}
+    private void sendPostData(boolean hasFile, String end_data,
+            HttpURLConnection connection) throws IOException,
+            UnsupportedEncodingException, FileNotFoundException {
+        DataOutputStream out = new DataOutputStream(connection.getOutputStream());
+
+        StringBuffer buffer = new StringBuffer();
+        Iterator<Entry<String, String>> iterator = mQueryStr.entrySet().iterator();
+        while (iterator.hasNext()) {
+            Entry<String, String> entry = iterator.next();
+            if (hasFile && mFiles.contains(entry.getKey())) {
+                continue;
+            }
+            String value = entry.getValue();
+            
+
+            if (hasFile) {
+                buffer.append("--");
+                buffer.append(BOUNDARY);
+                buffer.append("\r\n");
+                buffer.append("Content-Disposition: form-data; name=\"");
+                buffer.append(entry.getKey());
+
+                buffer.append("\"\r\n\r\n");
+                buffer.append(URLEncoder.encode(value, "utf-8"));
+                buffer.append("\r\n");
+            } else {
+                value = value != null ? URLEncoder.encode(value, "utf-8") : "";
+                buffer.append(entry.getKey()).append("=").append(value).append("&");
+            }
+        }
+        System.out.println(mApi);
+        System.out.println(buffer);
+        if(hasFile){
+            out.writeBytes(buffer.toString());
+        }else{
+            if(buffer.length()>0){//remove end &
+                out.writeBytes(buffer.substring(0, buffer.length()-1));
+            }else{
+                out.writeBytes(buffer.toString());
+            }
+        }
+
+
+        if (hasFile) {
+            long totalSize = 0l;
+            for (int i = 0; i < mFiles.size(); i++) {
+                String fname = mQueryStr.get(mFiles.get(i));
+                File file = new File(fname);
+                if (file.exists()) {
+                    FileInputStream fis = new FileInputStream(file);
+                    totalSize += fis.available();
+                    fis.close();
+                }
+            }
+            
+            for (int i = 0; i < mFiles.size(); i++) {
+                String fname = mQueryStr.get(mFiles.get(i));
+                File file = new File(fname);
+                StringBuilder sb = new StringBuilder();
+                sb.append("--");
+                sb.append(BOUNDARY);
+                sb.append("\r\n");
+                sb.append("Content-Disposition: form-data; name=\"");
+                sb.append(mFiles.get(i));
+                sb.append("\"; filename=\"");
+                sb.append(file.getName());
+                sb.append("\"\r\n");
+                sb.append("Content-Type: application/octet-stream\r\n\r\n");
+
+                out.writeBytes(sb.toString());
+                DataInputStream in = new DataInputStream(new FileInputStream(file));
+                int bytes = 0;
+                long sendedSize = 0;
+                byte[] bufferOut = new byte[1024];
+                while ((bytes = in.read(bufferOut)) != -1) {
+                    out.write(bufferOut, 0, bytes);
+                    out.flush();
+                    sendedSize += bytes;
+                    if(mCallback!=null)mCallback.updateApiProgress((float)sendedSize / (float)totalSize);
+                }
+                out.writeBytes("\r\n");
+                
+                in.close();
+            }
+            out.writeBytes(end_data);
+        }
+
+        out.flush();
+        out.close(); // flush and close
+    }
+    
+    private void sendJsonPostData(String end_data,HttpURLConnection connection) throws IOException,
+            UnsupportedEncodingException, FileNotFoundException {
+        DataOutputStream out = new DataOutputStream(connection.getOutputStream());
+        JSONObject object = new JSONObject(mQueryStr);
+        String buffer = "";
+        try{
+            buffer = object.toString();
+        }catch(Exception e){
+            
+        }
+        System.out.println(mApi);
+        System.out.println("raw JSON:"+buffer);
+        out.writeBytes(buffer.toString());
+        out.flush();
+        out.close(); // flush and close
+    }
 
 	public int httpCode(){
 	    return mHttpCode;
