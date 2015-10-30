@@ -7,6 +7,7 @@ import java.io.FilenameFilter;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URL;
+import java.net.URLConnection;
 import java.util.HashMap;
 
 import android.content.Context;
@@ -161,50 +162,55 @@ public class ImageLoader {
                 new Thread("loadFileFromUrl") {
                     @Override
                     public void run() {                  	
-                    	InputStream inputStream = null;
-                    	try {
-                    		URL u = new URL(fileUrl);
-                    		inputStream = (InputStream) u.getContent();
-                    	} catch (Exception e) {
-                    		Log.d("loadFileFromUrl", fileUrl+":"+e.getMessage());
-                    	}
-                    	if (inputStream == null) {
-                    		mHandler.obtainMessage(LOAD_FILE, new Object[]{"", fileCallback}).sendToTarget();                           
-                    		return ;
-                    	}
-                    	
                         try {
-                            File dirFile = mContext.getExternalCacheDir();  
-                            if(dirFile != null){
-                                if( ! dirFile.exists()){  
-                                    dirFile.mkdir();  
-                                }  
-                                File cacheFile = new File(dirFile.getAbsolutePath() + "/" + Util.MD5(fileUrl));  
-                                OutputStream outStream = null;
-                                try {
-                                    outStream = new FileOutputStream(cacheFile);
-                                    byte[] buffer = new byte[4*1024];
-                                    while (inputStream.read(buffer) != -1) {
-                                         outStream.write(buffer);
-                                     }
-                                     outStream.flush();
-                                     String file_path = cacheFile.getAbsolutePath();
-                                     mHandler.obtainMessage(LOAD_FILE, new Object[]{file_path, fileCallback}).sendToTarget();
-                                     mMemoryCache.put(fileUrl, file_path);
-                                     
-                                } catch (Exception e) {
-                                     e.printStackTrace();
-                                } finally{
-                                    try {
-                                    	inputStream.close();
-                                        outStream.close();
-                                    } catch (Exception e) {
-                                        e.printStackTrace();
-                                    }
-                                }
+                            File dirFile = mContext.getExternalCacheDir();
+                            if (dirFile == null) {
+                            	mHandler.obtainMessage(LOAD_FILE, new Object[]{"", fileCallback}).sendToTarget();                           
+                            	return;
                             }
+                            
+                            if( ! dirFile.exists()){  
+                                dirFile.mkdir();  
+                            }  
+                            String[] splitUrl = fileUrl.split("\\?");
+                            int pos = splitUrl[0].lastIndexOf(".");
+                            String extName = "";
+                            if (pos != -1) extName = splitUrl[0].substring(pos);
+                            InputStream inputStream = null;
+                            FileOutputStream outStream = null;
+                            try {
+	                            
+	                    		URL u = new URL(fileUrl);         
+	                    		URLConnection conn = u.openConnection();
+	                    		inputStream = conn.getInputStream();   
+	                    		
+	                    		File cacheFile = new File(dirFile.getAbsolutePath() + "/" + Util.MD5(fileUrl) + extName);  
+	                            outStream = new FileOutputStream(cacheFile);
+	                            
+                            	int byteread = 0;
+                                byte[] buffer = new byte[1024];
+                                while ((byteread = inputStream.read(buffer)) != -1) {
+                                	outStream.write(buffer, 0, byteread);
+                                 }
+                                 String file_path = cacheFile.getAbsolutePath();
+                                 mHandler.obtainMessage(LOAD_FILE, new Object[]{file_path, fileCallback}).sendToTarget();
+                                 mMemoryCache.put(fileUrl, file_path);
+                                 
+                            } catch (Exception e) {
+                                 e.printStackTrace();
+                            } finally{
+                                try {
+                                	inputStream.close();
+                                	outStream.close();
+                                } catch (Exception e) {
+                                    e.printStackTrace();
+                                }
+                                mHandler.obtainMessage(LOAD_FILE, new Object[]{"", fileCallback}).sendToTarget();
+                            }
+                            
 	                    } catch (Exception e) {
 	                        e.printStackTrace();
+	                        mHandler.obtainMessage(LOAD_FILE, new Object[]{"", fileCallback}).sendToTarget();
 	                    }
                     }
                 }.start();
