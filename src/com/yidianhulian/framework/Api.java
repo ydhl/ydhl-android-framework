@@ -58,6 +58,7 @@ public class Api {
 	public static final String BOUNDARY = "-----------AndroidFormBoundar7d4a6d158c9";
 	private String mApi;
 	private Map<String, String> mQueryStr;
+	private String mJSONData;
 	private PostDataType mPostDataType = PostDataType.FORM;
 	private List<String> mFiles;
 	private String mMethod;
@@ -92,9 +93,18 @@ public class Api {
         this(method, api, queryStr, null);
     }
 	
-	public void setPostDataType(PostDataType type){
-	    mPostDataType = type;
-	}
+	/**
+	 * Post 一个原始json字符串, 这时putArg不起作用
+	 * 
+	 * @param method
+	 * @param api
+	 * @param jsonString 格式化的json字符串
+	 */
+	public Api(String method, String api, String jsonString){
+        this(method, api, new HashMap<String, String>(), null);
+        mPostDataType = PostDataType.JSON;
+        mJSONData = jsonString;
+    }
 	
 	public void addHeader(String header, String value){
 	    mHeaders.put(header, value);
@@ -148,12 +158,14 @@ public class Api {
             connection.setUseCaches(false);
             connection.setInstanceFollowRedirects(true);
             if (hasFile) {
-                connection.setRequestProperty("Content-type",
-                        "multipart/form-data; boundary=" + BOUNDARY);
+                connection.setRequestProperty("Content-type", "multipart/form-data; boundary=" + BOUNDARY);
                 connection.setRequestProperty("Charset", "UTF-8");
-            } else {
-                connection.setRequestProperty("Content-Type",
-                        "application/x-www-form-urlencoded");
+            } else if(mPostDataType==PostDataType.JSON) {
+                connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+            }else if(mPostDataType==PostDataType.XML) {
+                connection.setRequestProperty("Content-Type", "application/xml; charset=utf-8");
+            }else{
+                connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
             }
 
             for (Entry<String, String> header : mHeaders.entrySet()) {
@@ -296,16 +308,9 @@ public class Api {
     private void sendJsonPostData(String end_data,HttpURLConnection connection) throws IOException,
             UnsupportedEncodingException, FileNotFoundException {
         DataOutputStream out = new DataOutputStream(connection.getOutputStream());
-        JSONObject object = new JSONObject(mQueryStr);
-        String buffer = "";
-        try{
-            buffer = object.toString();
-        }catch(Exception e){
-            
-        }
         System.out.println(mApi);
-        System.out.println("raw JSON:"+buffer);
-        out.writeBytes(buffer.toString());
+        System.out.println("raw JSON:"+mJSONData);
+        out.writeBytes(mJSONData);
         out.flush();
         out.close(); // flush and close
     }
