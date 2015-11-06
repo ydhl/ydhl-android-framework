@@ -161,7 +161,7 @@ public class Api {
                 connection.setRequestProperty("Content-type", "multipart/form-data; boundary=" + BOUNDARY);
                 connection.setRequestProperty("Charset", "UTF-8");
             } else if(mPostDataType==PostDataType.JSON) {
-                connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+                connection.setRequestProperty("Content-Type", "application/json");
             }else if(mPostDataType==PostDataType.XML) {
                 connection.setRequestProperty("Content-Type", "application/xml; charset=utf-8");
             }else{
@@ -310,7 +310,8 @@ public class Api {
         DataOutputStream out = new DataOutputStream(connection.getOutputStream());
         System.out.println(mApi);
         System.out.println("raw JSON:"+mJSONData);
-        out.writeBytes(mJSONData);
+//        out.writeBytes(mJSONData);//json中有中文，spring不认
+        out.writeChars(mJSONData);//json中有中文，spring才认
         out.flush();
         out.close(); // flush and close
     }
