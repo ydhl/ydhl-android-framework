@@ -13,6 +13,7 @@ import java.util.HashMap;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Matrix;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.os.Handler;
@@ -33,6 +34,8 @@ public class ImageLoader {
 	
 	private static final int LOAD_IMAGE = 0; //加载图片
 	private static final int LOAD_FILE = 1; //加载其它资源文件
+	private int width=0;
+	private int height=0;
 	
 	public ImageLoader(Context context) {
 	    mContext = context;
@@ -60,6 +63,19 @@ public class ImageLoader {
 	   return files[0];  
 	}
 	
+	public void loadImage(ImageView imageView, String imageUrl, int width, int height){
+	    this.width = width;
+	    this.height = height;
+        loadImage(imageView, imageUrl, new ImageLoaded() {
+            @Override
+            public void imageLoaded(ImageView imageView, Drawable imageDrawable) {
+                if(imageDrawable!=null){
+                    imageView.setImageDrawable(imageDrawable);
+                }
+            }
+        });
+    }
+	
 	public void loadImage(ImageView imageView, String imageUrl){
 	    loadImage(imageView, imageUrl, new ImageLoaded() {
             @Override
@@ -81,7 +97,12 @@ public class ImageLoader {
         	    File cachedFile = cachedFile(imageUrl);
                 if (cachedFile != null) {
                 	Bitmap bm = BitmapFactory.decodeFile(cachedFile.getAbsolutePath());
+                	
+                	if(width>0 && height>0){
+                	    bm = ImageUtils.extractMiniThumb(bm, width, height, true);
+                	}
                 	BitmapDrawable cached = new BitmapDrawable(mContext.getResources(), bm);
+                	
                     mMemoryCache.put(imageUrl, cached);
                     mHandler.obtainMessage(LOAD_IMAGE, new Object[]{imageView, cached, imageCallback}).sendToTarget();
                     return;
@@ -134,6 +155,12 @@ public class ImageLoader {
 			d = new BitmapDrawable(mContext.getResources(), i);
 			d.setTargetDensity(mContext.getResources().getDisplayMetrics());
 			i.close();
+			
+			if(width>0 && height>0){
+                Bitmap bm = ImageUtils.extractMiniThumb(d.getBitmap(), width, height, true);
+                d = new BitmapDrawable(mContext.getResources(), bm);
+            }
+			
 			
 		} catch (Exception e) {
 			Log.d("loadImageFromUrl", url+":"+e.getMessage());
